@@ -25,7 +25,7 @@ ZeroDivisionError: integer division or modulo by zero
 import traceback
 
 
-class TracedError(StandardError):
+class TracedError(BaseException):
     def __init__(self, msg, cause=None):
         trace_msg = msg
         if cause is not None:
