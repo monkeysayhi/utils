@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 
+from traced_error import ErrorWrapper
 from usr_exceptions import TimeoutError, ExecutionError, RemoteError
 
 DEFAULT_USER = "msh"
@@ -161,8 +162,7 @@ def exec_command(cmd, silent=False, out=sys.stdout, err=sys.stderr, shell=False,
             logging.warn("Fail to execute command: %s, ret: %s, cause: %s"
                          % (_cmd_str, ret, "(%s: %s)" % (type(e).__name__, e.message,)))
             return 1
-        raise ExecutionError("Fail to execute command: %s, ret: %s, cause: %s"
-                             % (_cmd_str, ret, "(%s: %s)" % (type(e).__name__, e.message)))
+        raise ExecutionError("Fail to execute command: %s, ret: %s" % (_cmd_str, ret), e)
 
     if ret == 0:
         return 0
@@ -200,7 +200,7 @@ def __exec_command_internal(cmd, out=sys.stdout, err=sys.stderr, shell=False,
             child_pids = __get_child_process(p.pid, out=out, err=err, )
         except OSError as os_e:
             logging.warn("Timeout but fail to get child processes, ppid: %d" % int(p.pid))
-            raise os_e
+            raise ErrorWrapper(os_e)
         pids.extend(child_pids)
     for pid in pids:
         # process might have died before getting to this line
@@ -210,7 +210,7 @@ def __exec_command_internal(cmd, out=sys.stdout, err=sys.stderr, shell=False,
         except OSError as os_e:
             if os.path.isdir("/proc/%d" % int(pid)):
                 logging.warn("Timeout but fail to kill process, still exist: %d, " % int(pid))
-                raise os_e
+                raise ErrorWrapper(os_e)
             logging.debug("Timeout but no need to kill process, already no such process: %d" % int(pid))
     logging.info("Killed all processes, ppid: %s" % p.pid)
 

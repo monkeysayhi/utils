@@ -1,4 +1,7 @@
-class BaseError(StandardError):
+from traced_error import TracedError
+
+
+class BaseError(TracedError):
     pass
 
 
