@@ -26,7 +26,7 @@ import traceback
 
 
 class TracedError(BaseException):
-    def __init__(self, msg, cause=None):
+    def __init__(self, msg="", cause=None):
         trace_msg = msg
         if cause is not None:
             _spfile = SimpleFile()
@@ -36,6 +36,11 @@ class TracedError(BaseException):
                          + "\nCaused by:\n\n" \
                          + _cause_tm
         super(TracedError, self).__init__(trace_msg)
+
+
+class ErrorWrapper(TracedError):
+    def __init__(self, cause=None):
+        super(ErrorWrapper, self).__init__("Just wrapping cause", cause)
 
 
 class SimpleFile(object):
