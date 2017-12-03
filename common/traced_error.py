@@ -39,7 +39,7 @@ class TracedError(BaseException):
 
 
 class ErrorWrapper(TracedError):
-    def __init__(self, cause=None):
+    def __init__(self, cause):
         super(ErrorWrapper, self).__init__("Just wrapping cause", cause)
 
 
