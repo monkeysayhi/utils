@@ -29,7 +29,7 @@ class TracedError(BaseException):
     def __init__(self, msg="", cause=None):
         trace_msg = msg
         if cause is not None:
-            _spfile = SimpleFile()
+            _spfile = _SimpleFile()
             traceback.print_exc(file=_spfile)
             _cause_tm = _spfile.read()
             trace_msg += "\n" \
@@ -43,9 +43,9 @@ class ErrorWrapper(TracedError):
         super(ErrorWrapper, self).__init__("Just wrapping cause", cause)
 
 
-class SimpleFile(object):
+class _SimpleFile(object):
     def __init__(self, ):
-        super(SimpleFile, self).__init__()
+        super(_SimpleFile, self).__init__()
         self.buffer = ""
 
     def write(self, str):

@@ -6,7 +6,7 @@ import sys
 import time
 
 from traced_error import ErrorWrapper
-from usr_exceptions import TimeoutError, ExecutionError, RemoteError
+from internal_exceptions import TimeoutError, ExecutionError, RemoteError
 
 DEFAULT_USER = "msh"
 
