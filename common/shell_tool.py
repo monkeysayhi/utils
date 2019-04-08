@@ -11,18 +11,25 @@ from internal_exceptions import TimeoutError, ExecutionError, RemoteError
 DEFAULT_USER = "msh"
 
 
-def is_remote_process_exist(host, remote_pname, user=DEFAULT_USER, timeout=3, ):
+def is_process_exist(pname, ):
+    return exe(
+        "if [ `ps aux | grep '%s' | grep -v grep | wc -l` -ne 0 ]; then exit 0; fi; exit 1" % pname,
+        silent=True,
+    ) == 0
+
+
+def is_remote_process_exist(host, pname, user=DEFAULT_USER, timeout=3, ):
     return ssh(
         host,
-        "if [ `ps aux | grep '%s' | grep -v grep | wc -l` -ne 0 ]; then exit 0; fi; exit 1" % remote_pname,
+        "if [ `ps aux | grep '%s' | grep -v grep | wc -l` -ne 0 ]; then exit 0; fi; exit 1" % pname,
         user=user, timeout=timeout, silent=True,
     ) == 0
 
 
-def is_remote_service_active(host, remote_service_name, user=DEFAULT_USER, timeout=3, ):
+def is_remote_service_active(host, service_name, user=DEFAULT_USER, timeout=3, ):
     return ssh(
         host,
-        "systemctl --user is-active %s" % remote_service_name,
+        "systemctl --user is-active %s" % service_name,
         user=user, timeout=timeout, silent=True,
     ) == 0
 
@@ -83,26 +90,26 @@ def __restart_remote_service_internal(host, service_path, user=DEFAULT_USER, tim
     )
 
 
-def is_remote_dir_exist(host, remote_dir_path, user=DEFAULT_USER, timeout=3, ):
+def is_remote_dir_exist(host, dir_path, user=DEFAULT_USER, timeout=3, ):
     return ssh(
         host,
-        "test -d %s" % remote_dir_path,
+        "test -d %s" % dir_path,
         user=user, timeout=timeout, silent=True,
     ) == 0
 
 
-def is_remote_file_exist(host, remote_file_path, user=DEFAULT_USER, timeout=3, ):
+def is_remote_file_exist(host, file_path, user=DEFAULT_USER, timeout=3, ):
     return ssh(
         host,
-        "test -f %s" % remote_file_path,
+        "test -f %s" % file_path,
         user=user, timeout=timeout, silent=True,
     ) == 0
 
 
-def remove_remote_file(host, remote_file_path, user=DEFAULT_USER, timeout=3, ):
+def remove_remote_path(host, path, user=DEFAULT_USER, timeout=3, ):
     return ssh(
         host,
-        "rm -rf %s" % remote_file_path,
+        "rm -rf %s" % path,
         user=user, timeout=timeout, silent=True,
     ) == 0
 
@@ -125,7 +132,7 @@ def ssh(host, sub_cmd, user=DEFAULT_USER, timeout=3, silent=False,
     ], silent=silent, out=out, err=err)
 
 
-def scp_from_local(local_file_path, host, remote_file_path, user=DEFAULT_USER, timeout=3, silent=False,
+def scp_from_local(local_file_path, host, file_path, user=DEFAULT_USER, timeout=3, silent=False,
                    out=sys.stdout, err=sys.stderr, ):
     return exec_command([
         "scp",
@@ -134,11 +141,11 @@ def scp_from_local(local_file_path, host, remote_file_path, user=DEFAULT_USER, t
         "-o StrictHostKeyChecking=no",
         "-o PasswordAuthentication=no",
         local_file_path,
-        "%s@%s:%s" % (user, host, remote_file_path,),
+        "%s@%s:%s" % (user, host, file_path,),
     ], silent=silent, out=out, err=err)
 
 
-def scp_to_local(host, remote_file_path, local_file_path, user=DEFAULT_USER, timeout=3, silent=False,
+def scp_to_local(host, file_path, local_file_path, user=DEFAULT_USER, timeout=3, silent=False,
                  out=sys.stdout, err=sys.stderr, ):
     return exec_command([
         "scp",
@@ -146,9 +153,14 @@ def scp_to_local(host, remote_file_path, local_file_path, user=DEFAULT_USER, tim
         "-o ConnectTimeout=%s" % timeout,
         "-o StrictHostKeyChecking=no",
         "-o PasswordAuthentication=no",
-        "%s@%s:%s" % (user, host, remote_file_path,),
+        "%s@%s:%s" % (user, host, file_path,),
         local_file_path,
     ], silent=silent, out=out, err=err)
+
+
+def exe(sub_cmd, silent=False,
+        out=sys.stdout, err=sys.stderr, ):
+    return exec_command([sub_cmd, ], silent=silent, out=out, err=err)
 
 
 def exec_command(cmd, silent=False, out=sys.stdout, err=sys.stderr, shell=False,
