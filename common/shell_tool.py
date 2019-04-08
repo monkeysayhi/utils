@@ -125,11 +125,12 @@ def ssh(host, sub_cmd, user=DEFAULT_USER, timeout=3, silent=False,
     ], silent=silent, out=out, err=err)
 
 
-def scp_from_local(local_file_path, host, remote_file_path, user=DEFAULT_USER, silent=False,
+def scp_from_local(local_file_path, host, remote_file_path, user=DEFAULT_USER, timeout=3, silent=False,
                    out=sys.stdout, err=sys.stderr, ):
     return exec_command([
         "scp",
         "-o UserKnownHostsFile=/dev/null",
+        "-o ConnectTimeout=%s" % timeout,
         "-o StrictHostKeyChecking=no",
         "-o PasswordAuthentication=no",
         local_file_path,
@@ -137,11 +138,12 @@ def scp_from_local(local_file_path, host, remote_file_path, user=DEFAULT_USER, s
     ], silent=silent, out=out, err=err)
 
 
-def scp_to_local(host, remote_file_path, local_file_path, user=DEFAULT_USER, silent=False,
+def scp_to_local(host, remote_file_path, local_file_path, user=DEFAULT_USER, timeout=3, silent=False,
                  out=sys.stdout, err=sys.stderr, ):
     return exec_command([
         "scp",
         "-o UserKnownHostsFile=/dev/null",
+        "-o ConnectTimeout=%s" % timeout,
         "-o StrictHostKeyChecking=no",
         "-o PasswordAuthentication=no",
         "%s@%s:%s" % (user, host, remote_file_path,),
