@@ -5,8 +5,8 @@ import subprocess
 import sys
 import time
 
+from internal_exceptions import TimeoutError, ExecutionError, RemoteError, IllegalArgsError
 from traced_error import ErrorWrapper
-from internal_exceptions import TimeoutError, ExecutionError, RemoteError
 
 DEFAULT_USER = "msh"
 
@@ -158,9 +158,13 @@ def scp_to_local(host, file_path, local_file_path, user=DEFAULT_USER, timeout=3,
     ], silent=silent, out=out, err=err)
 
 
-def exe(sub_cmd, silent=False,
+def exe(cmd, silent=False,
         out=sys.stdout, err=sys.stderr, ):
-    return exec_command([sub_cmd, ], silent=silent, out=out, err=err)
+    if isinstance(cmd, str):
+        cmd = cmd.split(" ")
+    if not isinstance(cmd, (list, tuple)):
+        raise IllegalArgsError("Type of cmd should be str, list or tuple, got: %s" % type(cmd))
+    return exec_command(cmd, silent=silent, out=out, err=err)
 
 
 def exec_command(cmd, silent=False, out=sys.stdout, err=sys.stderr, shell=False,
