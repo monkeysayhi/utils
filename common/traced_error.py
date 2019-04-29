@@ -27,6 +27,7 @@ import traceback
 
 class TracedError(BaseException):
     def __init__(self, msg="", cause=None):
+        self.top_msg = msg
         trace_msg = msg
         if cause is not None:
             _spfile = _SimpleFile()
