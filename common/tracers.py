@@ -21,7 +21,7 @@ def trace_time(func):
         end = time.time()
         logging.debug(
             "end at %s, cost %.2fs: %s() -- return type: %s"
-            % (__format_time(end), end - begin, func.__name__, type(result)))
+            % (__format_time(end), end - begin, func.__name__, type(result).__name__))
         return result
 
     return wrapper
