@@ -1,4 +1,4 @@
-from traced_error import TracedError
+from .traced_error import TracedError
 
 
 class BaseError(TracedError):

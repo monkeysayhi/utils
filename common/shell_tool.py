@@ -5,8 +5,8 @@ import subprocess
 import sys
 import time
 
-from internal_exceptions import TimeoutError, ExecutionError, RemoteError, IllegalArgsError
-from traced_error import ErrorWrapper
+from .internal_exceptions import TimeoutError, ExecutionError, RemoteError, IllegalArgsError
+from .traced_error import ErrorWrapper
 
 DEFAULT_USER = "msh"
 
