@@ -3,6 +3,7 @@ import os
 import pwd
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -25,6 +26,7 @@ if os.path.exists(__TMPDIR):
     shutil.rmtree(__TMPDIR, ignore_errors=True)
     assert not os.path.exists(__TMPDIR)
 os.makedirs(__TMPDIR)
+os.chmod(__TMPDIR, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
 
 
 def __get_tmp_file(prefix="tmpfile"):
@@ -46,41 +48,48 @@ def __redirect_to_null(cmd):
         return cmd + [APPEND_STR]
 
 
-def is_process_exist(pname=None, pid=None, exec_timeout=DEFAULT_EXEC_TIMEOUT, no_o_e=True, ):
+def is_process_exist(pname=None, pid=None, silent=True, suppress_timeout=False,
+                     exec_timeout=DEFAULT_EXEC_TIMEOUT, no_o_e=True, ):
     assert pname is not None or pid is not None
     if pname is not None and pid is None:
-        return is_process_exist_by_pname(pname, exec_timeout=exec_timeout)
+        return is_process_exist_by_pname(pname, suppress_timeout=suppress_timeout, exec_timeout=exec_timeout)
     if pname is None and pid is not None:
-        return is_process_exist_by_pid(pid, exec_timeout=exec_timeout)
+        return is_process_exist_by_pid(pid, suppress_timeout=suppress_timeout, exec_timeout=exec_timeout)
     assert isinstance(pid, int)
     cmd_str = ("[ `ps aux | awk '{if($2 == %d) print $0}' | grep '%s' | grep -v grep | wc -l` -ge 1 ]"
                % (pid, pname))
     if no_o_e:
         cmd_str = __redirect_to_null(cmd_str)
     return exe(
-        [cmd_str, ], silent=True, shell=True, exec_timeout=exec_timeout,
+        [cmd_str, ], silent=silent, suppress_timeout=suppress_timeout, shell=True,
+        exec_timeout=exec_timeout,
     ) == 0
 
 
-def is_process_exist_by_pname(pname, exec_timeout=DEFAULT_EXEC_TIMEOUT, no_o_e=True, ):
+def is_process_exist_by_pname(pname, silent=True, suppress_timeout=False,
+                              exec_timeout=DEFAULT_EXEC_TIMEOUT, no_o_e=True, ):
     cmd_str = "[ `ps aux | grep '%s' | grep -v grep | wc -l` -ge 1 ]" % pname
     if no_o_e:
         cmd_str = __redirect_to_null(cmd_str)
     return exe(
-        [cmd_str, ], silent=True, shell=True, exec_timeout=exec_timeout,
+        [cmd_str, ], silent=silent, suppress_timeout=suppress_timeout, shell=True,
+        exec_timeout=exec_timeout,
     ) == 0
 
 
-def is_process_exist_by_pid(pid, exec_timeout=DEFAULT_EXEC_TIMEOUT, no_o_e=True, ):
+def is_process_exist_by_pid(pid, silent=True, suppress_timeout=False,
+                            exec_timeout=DEFAULT_EXEC_TIMEOUT, no_o_e=True, ):
     cmd_str = "ls -d /proc/%d/" % pid
     if no_o_e:
         cmd_str = __redirect_to_null(cmd_str)
     return exe(
-        [cmd_str, ], silent=True, shell=True, exec_timeout=exec_timeout,
+        [cmd_str, ], silent=silent, suppress_timeout=suppress_timeout, shell=True,
+        exec_timeout=exec_timeout,
     ) == 0
 
 
 def is_remote_process_exist(host, pname,
+                            silent=True, suppress_timeout=False,
                             user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                             exec_timeout=DEFAULT_EXEC_TIMEOUT,
                             no_o_e=True):
@@ -88,12 +97,13 @@ def is_remote_process_exist(host, pname,
     if no_o_e:
         cmd_str = __redirect_to_null(cmd_str)
     return ssh(
-        host, cmd_str, silent=True,
+        host, cmd_str, silent=silent, suppress_timeout=suppress_timeout,
         user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
     ) == 0
 
 
 def is_remote_service_active(host, service_name,
+                             silent=True, suppress_timeout=False,
                              user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                              exec_timeout=DEFAULT_EXEC_TIMEOUT,
                              no_o_e=True):
@@ -106,21 +116,22 @@ def is_remote_service_active(host, service_name,
         cmd[2] = __redirect_to_null(cmd[2])
     cmd_str = " ".join(cmd)
     return ssh(
-        host, cmd_str, silent=True,
+        host, cmd_str, silent=silent, suppress_timeout=suppress_timeout,
         user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
     ) == 0
 
 
-def stop_remote_service(host, service_name, silent=False,
+def stop_remote_service(host, service_name, silent=False, suppress_timeout=False,
                         user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                         exec_timeout=DEFAULT_EXEC_TIMEOUT,
                         no_o_e=True, out=sys.stdout, err=sys.stderr, ):
+    # make stop op idempotent
     __stop_remote_service_internal(
-        host, service_name,
+        host, service_name, silent=True, suppress_timeout=True,
         user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
         no_o_e=no_o_e, out=out, err=err,
     )
-    if is_remote_service_active(host, service_name,
+    if is_remote_service_active(host, service_name, silent=silent, suppress_timeout=suppress_timeout,
                                 user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
                                 no_o_e=no_o_e, ):
         if silent:
@@ -132,7 +143,7 @@ def stop_remote_service(host, service_name, silent=False,
     return 0
 
 
-def __stop_remote_service_internal(host, service_name,
+def __stop_remote_service_internal(host, service_name, silent=False, suppress_timeout=False,
                                    user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                                    exec_timeout=DEFAULT_EXEC_TIMEOUT,
                                    no_o_e=True, out=sys.stdout, err=sys.stderr, ):
@@ -144,22 +155,30 @@ def __stop_remote_service_internal(host, service_name,
         cmd[0] = __redirect_to_null(cmd[0])
         cmd[2] = __redirect_to_null(cmd[2])
     cmd_str = " ".join(cmd)
-    return ssh(host, cmd_str, silent=True,
+    return ssh(host, cmd_str, silent=silent, suppress_timeout=suppress_timeout,
                user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
                out=out, err=err, )
 
 
-def restart_remote_service(host, service_path, silent=False,
+def restart_remote_service(host, service_path, silent=False, suppress_timeout=False,
                            user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                            exec_timeout=DEFAULT_EXEC_TIMEOUT,
                            no_o_e=True, out=sys.stdout, err=sys.stderr, ):
-    __restart_remote_service_internal(
-        host, service_path, silent=silent,
+    # restart op cannot be idempotent
+    ret = __restart_remote_service_internal(
+        host, service_path, silent=silent, suppress_timeout=suppress_timeout,
         user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
         no_o_e=no_o_e, out=out, err=err,
     )
+    if ret != 0:
+        if silent:
+            logging.debug("Fail to restart remote service,"
+                          " host: %s, service_path: %s" % (host, service_path,))
+            return ret
+        raise RemoteError("Fail to restart remote service,"
+                          " host: %s, service_path: %s" % (host, service_path,))
     service_name = os.path.basename(service_path)
-    if not is_remote_service_active(host, service_name,
+    if not is_remote_service_active(host, service_name, silent=silent, suppress_timeout=suppress_timeout,
                                     user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
                                     no_o_e=no_o_e):
         if silent:
@@ -171,7 +190,7 @@ def restart_remote_service(host, service_path, silent=False,
     return 0
 
 
-def __restart_remote_service_internal(host, service_path, silent=False,
+def __restart_remote_service_internal(host, service_path, silent=False, suppress_timeout=False,
                                       user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                                       exec_timeout=DEFAULT_EXEC_TIMEOUT,
                                       no_o_e=True, out=sys.stdout, err=sys.stderr, ):
@@ -184,24 +203,25 @@ def __restart_remote_service_internal(host, service_path, silent=False,
         cmd[0] = __redirect_to_null(cmd[0])
         cmd[2] = __redirect_to_null(cmd[2])
     cmd_str = " ".join(cmd)
-    return ssh(host, cmd_str, silent=silent,
+    return ssh(host, cmd_str, silent=silent, suppress_timeout=suppress_timeout,
                user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
                out=out, err=err, )
 
 
-def is_remote_dir_exist(host, dir_path, no_o_e=True,
+def is_remote_dir_exist(host, dir_path, suppress_timeout=False,
                         user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
-                        exec_timeout=DEFAULT_EXEC_TIMEOUT):
+                        exec_timeout=DEFAULT_EXEC_TIMEOUT,
+                        no_o_e=True, ):
     cmd_str = "[ -d %s ]" % dir_path
     if no_o_e:
         cmd_str = __redirect_to_null(cmd_str)
     return ssh(
-        host, cmd_str, silent=True,
+        host, cmd_str, silent=True, suppress_timeout=suppress_timeout,
         user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
     ) == 0
 
 
-def is_remote_file_exist(host, file_path,
+def is_remote_file_exist(host, file_path, suppress_timeout=False,
                          user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                          exec_timeout=DEFAULT_EXEC_TIMEOUT,
                          no_o_e=True, ):
@@ -209,24 +229,24 @@ def is_remote_file_exist(host, file_path,
     if no_o_e:
         cmd_str = __redirect_to_null(cmd_str)
     return ssh(
-        host, cmd_str, silent=True,
+        host, cmd_str, silent=True, suppress_timeout=suppress_timeout,
         user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
     ) == 0
 
 
 # FIXME(msh) failed sometimes when existing non-empty subdir
-def remove_remote_path(host, path,
+def remove_remote_path(host, path, suppress_timeout=False,
                        user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                        exec_timeout=DEFAULT_EXEC_TIMEOUT,
                        no_o_e=True, ):
     cmd_str = "rm -rf %s" % path
     if no_o_e:
         cmd_str = __redirect_to_null(cmd_str)
-    return ssh(host, cmd_str, silent=False,
+    return ssh(host, cmd_str, silent=False, suppress_timeout=suppress_timeout,
                user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout)
 
 
-def scp_from_local(local_file_path, host, file_path, silent=False,
+def scp_from_local(local_file_path, host, file_path, silent=False, suppress_timeout=False,
                    user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                    exec_timeout=DEFAULT_EXEC_TIMEOUT,
                    no_o_e=True, out=sys.stdout, err=sys.stderr, ):
@@ -241,10 +261,11 @@ def scp_from_local(local_file_path, host, file_path, silent=False,
     ]
     if no_o_e:
         cmd.insert(1, "-q")
-    return exec_command(cmd, silent=silent, exec_timeout=exec_timeout, out=out, err=err)
+    return exec_command(cmd, silent=silent, suppress_timeout=suppress_timeout,
+                        exec_timeout=exec_timeout, out=out, err=err)
 
 
-def scp_to_local(host, file_path, local_file_path, silent=False,
+def scp_to_local(host, file_path, local_file_path, silent=False, suppress_timeout=False,
                  user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                  exec_timeout=DEFAULT_EXEC_TIMEOUT,
                  no_o_e=True, out=sys.stdout, err=sys.stderr, ):
@@ -259,10 +280,11 @@ def scp_to_local(host, file_path, local_file_path, silent=False,
     ]
     if no_o_e:
         cmd.insert(1, "-q")
-    return exec_command(cmd, silent=silent, exec_timeout=exec_timeout, out=out, err=err)
+    return exec_command(cmd, silent=silent, suppress_timeout=suppress_timeout,
+                        exec_timeout=exec_timeout, out=out, err=err)
 
 
-def ssh(host, sub_cmd, silent=False,
+def ssh(host, sub_cmd, silent=False, suppress_timeout=False,
         user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
         exec_timeout=DEFAULT_EXEC_TIMEOUT,
         out=sys.stdout, err=sys.stderr, ):
@@ -277,17 +299,17 @@ def ssh(host, sub_cmd, silent=False,
         "-o StrictHostKeyChecking=no",
         "%s@%s" % (user, host,),
         "%s" % sub_cmd,
-    ], silent=silent, exec_timeout=exec_timeout, out=out, err=err)
+    ], silent=silent, suppress_timeout=suppress_timeout, exec_timeout=exec_timeout, out=out, err=err)
 
 
-def ssh_with_out(host, sub_cmd, silent=False,
+def ssh_with_out(host, sub_cmd, silent=False, suppress_timeout=False,
                  user=DEFAULT_USER, conn_timeout=DEFAULT_CONN_TIMEOUT,
                  exec_timeout=DEFAULT_EXEC_TIMEOUT,
                  err=sys.stderr, ):
     tmpfile = __get_tmp_file("ssh_with_out")
     try:
         with open(tmpfile, "w") as _wfile:
-            ret = ssh(host, sub_cmd, silent=silent,
+            ret = ssh(host, sub_cmd, silent=silent, suppress_timeout=suppress_timeout,
                       user=user, conn_timeout=conn_timeout, exec_timeout=exec_timeout,
                       out=_wfile, err=err)
         if not os.path.isfile(tmpfile):
@@ -301,23 +323,23 @@ def ssh_with_out(host, sub_cmd, silent=False,
             os.remove(tmpfile)
 
 
-def exe(cmd, silent=False, shell=False,
+def exe(cmd, silent=False, suppress_timeout=False, shell=False,
         exec_timeout=DEFAULT_EXEC_TIMEOUT, out=sys.stdout, err=sys.stderr, ):
     if isinstance(cmd, str):
         cmd = cmd.split(" ")
     if not isinstance(cmd, (list, tuple)):
         raise IllegalArgsError(
             "Type of cmd should be str, list or tuple, got: %s" % type(cmd).__name__)
-    return exec_command(cmd, silent=silent, shell=shell,
+    return exec_command(cmd, silent=silent, suppress_timeout=suppress_timeout, shell=shell,
                         exec_timeout=exec_timeout, out=out, err=err)
 
 
-def exe_with_out(cmd, silent=False, shell=False,
+def exe_with_out(cmd, silent=False, suppress_timeout=False, shell=False,
                  exec_timeout=DEFAULT_EXEC_TIMEOUT, err=sys.stderr, ):
     tmpfile = __get_tmp_file("exe_with_out")
     try:
         with open(tmpfile, "w") as _wfile:
-            ret = exe(cmd, silent=silent, shell=shell,
+            ret = exe(cmd, silent=silent, suppress_timeout=suppress_timeout, shell=shell,
                       exec_timeout=exec_timeout, out=_wfile, err=err)
         if not os.path.isfile(tmpfile):
             content = ""
@@ -330,25 +352,22 @@ def exe_with_out(cmd, silent=False, shell=False,
             os.remove(tmpfile)
 
 
-def exec_command(cmd, silent=False, shell=False,
+def exec_command(cmd, silent=False, suppress_timeout=False, shell=False,
                  exec_timeout=DEFAULT_EXEC_TIMEOUT, out=sys.stdout, err=sys.stderr,
                  kill_tree=True):
     _cmd_str = " ".join(cmd)
 
-    ret = 1
-    try:
-        ret = __exec_command_internal(
-            cmd, out=out, err=err, shell=shell, exec_timeout=exec_timeout, kill_tree=kill_tree, )
-    except TimeoutError as e:
-        if silent:
-            logging.debug("Fail to execute command: %s, ret: %s, cause: %s"
-                          % (_cmd_str, ret, "(%s: %s)" % (type(e).__name__, e.top_msg,)))
+    rs = __exec_command_internal(
+        cmd, out=out, err=err, shell=shell, exec_timeout=exec_timeout, kill_tree=kill_tree, )
+    if rs[0]:
+        if suppress_timeout:
+            logging.info("Timeout to execute command: %s, exec_timeout: %ss" % (_cmd_str, exec_timeout,))
             return 1
-        raise ExecutionError("Fail to execute command: %s, ret: %s" % (_cmd_str, ret), e)
+        raise TimeoutError("Timeout to execute command: %s, exec_timeout: %ss" % (_cmd_str, exec_timeout,))
 
+    ret = rs[1]
     if ret == 0:
         return 0
-
     if silent:
         logging.debug("Fail to execute command: %s, ret: %s" % (_cmd_str, ret))
         return ret
@@ -363,7 +382,7 @@ def __exec_command_internal(cmd, shell=False,
     p = subprocess.Popen(cmd, stdout=out, stderr=err, shell=shell, )
 
     if exec_timeout is None or exec_timeout <= 0:
-        return p.wait()
+        return [False, p.wait()]
 
     start = int(time.time())
     now = int(time.time())
@@ -374,9 +393,8 @@ def __exec_command_internal(cmd, shell=False,
     if start + exec_timeout >= now:
         ret = p.poll()
         logging.debug("done before exec_timeout, ret: %s" % ret)
-        return ret
+        return [False, ret]
 
-    logging.warn("Timeout to execute command: %s, exec_timeout: %ss, killing" % (_cmd_str, exec_timeout,))
     pids = [p.pid]
     if kill_tree:
         try:
@@ -395,9 +413,8 @@ def __exec_command_internal(cmd, shell=False,
                 logging.warn("Timeout but fail to kill process, still exist: %d, " % int(pid))
                 raise ErrorWrapper(os_e)
             logging.debug("Timeout but no need to kill process, already no such process: %d" % int(pid))
-    logging.info("Killed all processes, ppid: %s" % p.pid)
-
-    raise TimeoutError("Timeout to execute command: %s, exec_timeout: %ss" % (_cmd_str, exec_timeout,))
+    logging.debug("Killed all processes, ppid: %s" % p.pid)
+    return [True, None]
 
 
 def __get_child_process(pid, out=sys.stdout, err=sys.stderr, ):
